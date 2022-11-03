@@ -48,6 +48,13 @@ def transplantCoords(cif_dict,new_coords,opt={}):
           raise Exception("Component ID "+comp_id+" not found in CIF dictionary.")
         block = doc.find_block("comp_"+comp_id)
         category = block.find_mmcif_category("_chem_comp_atom")
+        atom_list = []
+        for row in category:
+          atom_list.append(row["atom_id"])
+        if set(atom_list) != set(coord_dict[comp_id].keys()):
+          print("Unique atoms in CIF dictionary: "+set(atom_list).difference(set(coord_dict[comp_id].keys())))
+          print("Unique atoms in coordinate file: "+(set(set(coord_dict[comp_id].keys())).difference(set(atom_list))))
+          raise Exception("Input CIF and coordinate file do not contain set of atoms.")
         for row in category:
           if not row["atom_id"] in coord_dict[comp_id]:
             raise Exception("Atom "+row["atom_id"]+" not found in new coordinates.")
