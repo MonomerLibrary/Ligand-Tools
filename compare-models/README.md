@@ -1,3 +1,9 @@
+# compare_models.py
+
+Tool to compare two models, which are assumed to have the same atomic composition and nomenclature. Various per-atom statistics are extracted - B-factor, density peak height, RSCC, etc.
+
+At present, only a single MTZ file is used for calculation of density-based statistics corresponding to the positions of atoms in the two models.
+
 ## For full list of options:
 
 python3 compare_models.py --help
