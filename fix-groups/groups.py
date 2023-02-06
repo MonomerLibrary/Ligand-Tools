@@ -155,6 +155,7 @@ def fix_OP3(cc, alias, doc):
             OP1 = get_atom_name("OP2", alias)
             s1, s2 = OP3, OP2
 
+        # FIXME: problematic if OP1/OP2/OP3 name is used other than atom names
         block = doc.find_block("comp_"+cc.name)
         rep = lambda v,x,y: y if v==x else v
         w = "*****"
@@ -167,6 +168,34 @@ def fix_OP3(cc, alias, doc):
             item.loop.set_all_values(vv)
         return True
 # fix_OP3()
+
+def fix_OXT(cc, alias, doc):
+    OXT = get_atom_name("OXT", alias)
+    O = get_atom_name("O", alias)
+    C = get_atom_name("C", alias)
+    OXT_charge = [x.charge for x in cc.atoms if x.id == OXT][0]
+    C_OXT = sorted((C, OXT))
+    btype = [b.type for b in cc.rt.bonds if sorted((b.id1.atom, b.id2.atom)) == C_OXT][0]
+    
+    if OXT_charge != -1 or btype != gemmi.BondType.Single:
+        print("WARNING {} OXT has wrong charge and/or wrong valence ({}, {})".format(cc.name, OXT_charge, btype))
+        s1, s2 = OXT, O
+        block = doc.find_block("comp_"+cc.name)
+        rep = lambda v,x,y: y if v==x else v
+        w = "*****"
+        for row in block.find("_chem_comp_atom.", ["atom_id"]):
+            row[0] = gemmi.cif.quote(rep(rep(rep(row.str(0), s1, w), s2, s1), w, s2))
+        for item in block:
+            if not item.loop: continue
+            # _chem_comp_atom.type_symbol etc has "O" that should not be replaced
+            if "_chem_comp_atom.atom_id" in item.loop.tags: continue
+            assert all(w != v for v in item.loop.values)
+            vv = [[gemmi.cif.quote(rep(rep(rep(gemmi.cif.as_string(item.loop.val(j,i)),s1, w), s2, s1), w, s2))
+                   for j in range(item.loop.length())]
+                  for i in range(item.loop.width())]
+            item.loop.set_all_values(vv)
+        return True
+# fix_OXT()
 
 def is_dna(cc, alias):
     _, chem = check_chemtype("C2'", cc, alias)
@@ -183,10 +212,11 @@ def change_group(newgr, doc):
 #groups = prepare_references(monlib_path)
 
 def fix_group_and_add_aliases(doc, references):
-    # Limitation1: if monomer can belong to multiple groups (with no changes of atom names),
-    #              the last matching group will be assigned.
-    # Limitation2: does not fix OXT/O (perhaps OXT should be always a leaving atom..)
-    # Limitation3: only check peptide/P-peptide/M-peptide/DNA/RNA. no support for sugars
+    # Limitations
+    # 1. if monomer can belong to multiple groups (with no changes of atom names),
+    #    the last matching group will be assigned.
+    # 2. only check peptide/P-peptide/M-peptide/DNA/RNA. no support for sugars
+    # 3. equivalent hydrogen atoms are not sorted (H/H2/H3 of peptides)
     
     cc = read_chemcomp(doc)
     g = graph_from_chemcomp(cc)
@@ -200,7 +230,25 @@ def fix_group_and_add_aliases(doc, references):
         if "peptide" in gr and peptide_found: continue
         genuine, alias = check_group(g, gref, gr, cc)
         if alias:
-            if "peptide" in gr: peptide_found = True
+            if "peptide" in gr:
+                peptide_found = True
+                # O/OXT are essentially equivalent
+                ooxt = {a[1]:i for i, a in enumerate(alias) if a[1] in ("O", "OXT")}
+                if len(ooxt) == 2:
+                    i, j = ooxt["O"], ooxt["OXT"]
+                    org_O = alias[i][0]
+                    org_OXT = alias[j][0]
+                    if org_OXT == "O" or org_O == "OXT":
+                        print("swap alias", alias[i], alias[j])
+                        alias[i][1], alias[j][1] = alias[j][1], alias[i][1]
+
+                alias = [x for x in alias if x[0]!=x[1]]
+                if not alias:
+                    print("INFO: {} can be {} by just swapping atoms".format(cc.name, gr))
+                    genuine = True      
+                if fix_OXT(cc, alias, doc):
+                    doc_changed = True
+
             if "DNA/RNA" in gr:
                 # OP1/OP2/OP3 are essentially equivalent
                 ops = {a[1]:i for i, a in enumerate(alias) if a[1].startswith("OP")}
