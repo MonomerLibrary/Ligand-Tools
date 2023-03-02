@@ -197,6 +197,14 @@ def fix_OXT(cc, alias, doc):
         return True
 # fix_OXT()
 
+def fix_H3(alias): # they are totally equivalent, so just sort them alphabetically
+    idxes = [i for i, a in enumerate(alias) if a[1] in ("H","H2","H3")]
+    if not idxes: return
+    a0 = sorted(alias[i][0] for i in idxes)
+    a1 = sorted(alias[i][1] for i in idxes)
+    for i,x,y in zip(idxes, a0, a1):
+        alias[i] = [x, y]
+
 def is_dna(cc, alias):
     _, chem = check_chemtype("C2'", cc, alias)
     return chem == "CH2"
@@ -241,7 +249,7 @@ def fix_group_and_add_aliases(doc, references):
                     if org_OXT == "O" or org_O == "OXT":
                         print("swap alias", alias[i], alias[j])
                         alias[i][1], alias[j][1] = alias[j][1], alias[i][1]
-
+                fix_H3(alias)
                 alias = [x for x in alias if x[0]!=x[1]]
                 if not alias:
                     print("INFO: {} can be {} by just swapping atoms".format(cc.name, gr))
@@ -275,7 +283,10 @@ def fix_group_and_add_aliases(doc, references):
         if genuine and cc.name not in keep_nonpolymer:
             # change group
             if gr == "DNA/RNA":
-                newgr = "DNA" if is_dna(cc, alias) else "RNA"
+                if cc.group in (gemmi.ChemComp.Group.Dna, gemmi.ChemComp.Group.Rna, gemmi.ChemComp.Group.DnaRna):
+                    newgr = group_str(cc.group)
+                else:
+                    newgr = "DNA" if is_dna(cc, alias) else "RNA"
             else:
                 newgr = gr
                 
