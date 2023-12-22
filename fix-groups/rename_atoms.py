@@ -25,12 +25,12 @@ MONOMER_LIBRARY, CCD = sys.argv[1:]
 ID_TAG = '_chem_comp_atom.atom_id'
 ALT_TAG = '_chem_comp_atom.alt_atom_id'
 
-def main():
+def main() -> None:
     print('reading CCD from', CCD, '...')
     ccd = cif.read(CCD)
+    print('updating', MONOMER_LIBRARY, '...')
     monlib = MonLib()
     monlib.monomer_dir = MONOMER_LIBRARY
-    print('updating', MONOMER_LIBRARY, '...')
     for line in sys.stdin:
         code = line.strip()
         path = monlib.path(code)
@@ -42,7 +42,7 @@ def main():
         print(' '.join('%s->%s' % item for item in renaming.items()))
         remediate(path, renaming)
 
-def read_old_new_mapping(ccd_block : cif.Block):
+def read_old_new_mapping(ccd_block : cif.Block) -> Dict[str,str]:
     renaming = {}
     for row in ccd_block.find([ALT_TAG, ID_TAG]):
         # don't unquote the new value, it will be copied
@@ -52,26 +52,38 @@ def read_old_new_mapping(ccd_block : cif.Block):
     return renaming
 
 
-def remediate(path : str, renaming : Dict[str, str]):
+def remediate(path : str, renaming : Dict[str, str]) -> None:
     doc = cif.read(path)
     block = doc[-1]
     id_col : cif.Column = block.find_loop(ID_TAG)
     atom_loop = id_col.get_loop()
     assert atom_loop
     if ALT_TAG in atom_loop.tags:
-        print('--- already has', ALT_TAG, '- skipping')
+        print(' --- already has', ALT_TAG, '- skipping')
         return
     pos = atom_loop.tags.index(ID_TAG)
     atom_loop.add_columns([ALT_TAG], '.', pos + 1)
-    for i in range(atom_loop.length()):
+    n = atom_loop.length()
+    for i in range(n):
         atom_loop[i, pos+1] = atom_loop[i, pos]
     for item in block:
         table = block.item_as_table(item)
         for i in range(table.width()):
             remediate_column(table.column(i), renaming)
+
+    # sanity checks
+    new_names = [atom_loop[i, pos] for i in range(n)]
+    if all(new_names[i] == atom_loop[i, pos+1] for i in range(n)):
+        print(' --- atom names not changed - skipping')
+        return
+    if len(set(new_names)) != n:
+        print(' --- skip, it would have duplicated atom names:',
+              ' '.join(x for x in set(new_names) if new_names.count(x) > 1))
+        return
+
     doc.write_file(path)
 
-def remediate_column(column : cif.Column, renaming : Dict[str, str]):
+def remediate_column(column : cif.Column, renaming : Dict[str, str]) -> None:
     tag = column.tag
     if '.atom_id' in tag and tag != '_chem_comp_alias.atom_id_standard':
         for n, atom_id in enumerate(column):
