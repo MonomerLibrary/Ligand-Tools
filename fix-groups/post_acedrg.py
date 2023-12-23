@@ -23,6 +23,8 @@ parser.add_argument("--json_out", default="post_acedrg.json",
                     help="output json file name")
 parser.add_argument("--do_not_keep_org", action="store_true",
                     help="By default it overwrites target files and keep .org files.")
+parser.add_argument("--do_not_skip_when_no_change", action="store_true",
+                    help="If you want white space changes")
 
 def find_files(targets):
     ret = []
@@ -51,7 +53,7 @@ def main(args):
         ret.append((f, cc_name, {"updated": doc_changed, "new_group": newgr,
                                  "old_group": oldgr.replace("non-polymer", "NON-POLYMER"),
                                  "aliases": aliases}))
-        if doc_changed:
+        if doc_changed or args.do_not_skip_when_no_change:
             if not args.do_not_keep_org: os.rename(f, f + ".org")
             doc.write_file(f, style=gemmi.cif.Style.Aligned)
             
