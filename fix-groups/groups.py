@@ -302,6 +302,12 @@ def fix_group_and_add_aliases(doc, references):
             for id1, id2 in alias:
                 loop.add_row([cc.name, gr, id1, id2])
         doc_changed = True
+    else:
+        for item in doc[-1]:
+            if "_chem_comp_alias.comp_id" in item.loop.tags:
+                print(cc.name, "alias no longer needed")
+                item.erase()
+                break
         
     #if doc_changed:
     #    doc.write_file(f, style=gemmi.cif.Style.Aligned)
