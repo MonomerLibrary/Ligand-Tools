@@ -162,7 +162,7 @@ def fix_OP3(cc, alias, doc):
         for item in block:
             if not item.loop: continue
             assert all(w != v for v in item.loop.values)
-            vv = [[gemmi.cif.quote(rep(rep(rep(gemmi.cif.as_string(item.loop.val(j,i)),s1, w), s2, s1), w, s2))
+            vv = [[gemmi.cif.quote(rep(rep(rep(gemmi.cif.as_string(item.loop[j,i]),s1, w), s2, s1), w, s2))
                    for j in range(item.loop.length())]
                   for i in range(item.loop.width())]
             item.loop.set_all_values(vv)
@@ -190,7 +190,7 @@ def fix_OXT(cc, alias, doc):
             # _chem_comp_atom.type_symbol etc has "O" that should not be replaced
             if "_chem_comp_atom.atom_id" in item.loop.tags: continue
             assert all(w != v for v in item.loop.values)
-            vv = [[gemmi.cif.quote(rep(rep(rep(gemmi.cif.as_string(item.loop.val(j,i)),s1, w), s2, s1), w, s2))
+            vv = [[gemmi.cif.quote(rep(rep(rep(gemmi.cif.as_string(item.loop[j,i]),s1, w), s2, s1), w, s2))
                    for j in range(item.loop.length())]
                   for i in range(item.loop.width())]
             item.loop.set_all_values(vv)
