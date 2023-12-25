@@ -46,7 +46,7 @@ def main() -> None:
             print('--- nothing to rename')
             continue
         print(' '.join('%s->%s' % item for item in renaming.items()))
-        if remediate(path, renaming):
+        if remediate(path, renaming, ccd[code]):
             remediate_list(doc_list, code, links, mods, renaming)
     doc_list.write_file(path_list)
 
@@ -60,7 +60,7 @@ def read_old_new_mapping(ccd_block : cif.Block) -> Dict[str,str]:
     return renaming
 
 
-def remediate(path : str, renaming : Dict[str, str]) -> None:
+def remediate(path : str, renaming : Dict[str, str], ccd_block : cif.Block) -> None:
     doc = cif.read(path)
     block = doc[-1]
     id_col : cif.Column = block.find_loop(ID_TAG)
@@ -69,6 +69,9 @@ def remediate(path : str, renaming : Dict[str, str]) -> None:
     if ALT_TAG in atom_loop.tags:
         print(' --- already has', ALT_TAG, '- skipping')
         return
+    if is_peptide(doc):
+        renaming.update(check_peptide_n_h(ccd_block, block))
+
     pos = atom_loop.tags.index(ID_TAG)
     atom_loop.add_columns([ALT_TAG], '.', pos + 1)
     n = atom_loop.length()
@@ -89,7 +92,7 @@ def remediate(path : str, renaming : Dict[str, str]) -> None:
               ' '.join(x for x in set(new_names) if new_names.count(x) > 1))
         return
 
-    doc.write_file(path)
+    doc.write_file(path, style=cif.Style.Aligned)
     return True
 
 def remediate_column(column : cif.Column, renaming : Dict[str, str]) -> None:
@@ -99,6 +102,46 @@ def remediate_column(column : cif.Column, renaming : Dict[str, str]) -> None:
             unquoted_id = cif.as_string(atom_id)
             if unquoted_id in renaming:
                 column[n] = renaming[unquoted_id]
+
+def is_peptide(doc : cif.Document):
+    if doc.find_block("comp_list").find_value("_chem_comp.group") == "peptide":
+        return True
+    if any(x == "peptide" for x in doc[-1].find_values("_chem_comp_alias.group")):
+        return True
+    return False
+
+def check_peptide_n_h(ccd_block, monlib_block):
+    names_monlib = {"N": "N", "H": "H", "H2": "H2", "H3": "H3"}
+    for r in monlib_block.find("_chem_comp_alias.", ["group", "atom_id", "atom_id_standard"]):
+        if cif.as_string(r[0]) == "peptide" and cif.as_string(r[2]) in names_monlib:
+            names_monlib[cif.as_string(r[2])] = cif.as_string(r[1])
+
+    # remake renaming, to include everything
+    renaming = {row.str(0): row.str(1) for row in ccd_block.find([ALT_TAG, ID_TAG])}
+
+    if names_monlib["N"] not in renaming:
+        print("error {} not found in {} (ccd)".format(names_monlib["N"], ccd_block.name))
+        return {}
+    N_ccd = renaming[names_monlib["N"]]
+    NH_ccd = []
+    Hs_ccd = {cif.as_string(r[0]) for r in ccd_block.find("_chem_comp_atom.", ["atom_id", "type_symbol"])
+              if cif.as_string(r[1]) == "H"}
+    for r in ccd_block.find("_chem_comp_bond.", ["atom_id_1", "atom_id_2"]):
+        a1, a2 = cif.as_string(r[0]), cif.as_string(r[1])
+        if a1 == N_ccd and a2 in Hs_ccd:
+            NH_ccd.append(a2)
+        elif a2 == N_ccd and a1 in Hs_ccd:
+            NH_ccd.append(a1)
+    #print("Hs_ccd", Hs_ccd, "NH_ccd", NH_ccd)
+    ret = {}
+    for h in "H", "H2", "H3":
+        if names_monlib[h] not in renaming or renaming.get(names_monlib[h]) not in NH_ccd:
+            print("unmatched H", ccd_block.name, names_monlib[h])
+            if h not in Hs_ccd:
+                ret[names_monlib[h]] = h
+                print("debug", ccd_block.name, ret)
+            break
+    return ret
 
 def check_list(doc: cif.Document):
     links, mods = {}, {}
