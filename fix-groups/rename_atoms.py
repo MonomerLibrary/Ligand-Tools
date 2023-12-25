@@ -10,12 +10,15 @@
 # - adds _chem_comp_atom.alt_atom_id as a copy of _chem_comp_atom.atom_id
 # - uses the CCD mapping to rename all values with '.atom_id' in tag,
 #   except _chem_comp_alias.atom_id_standard
+# - fix links and modifications in mon_lib_list.cif
 
 # Call it with two arguments and provide codes from stdin:
 # python rename_atoms.py $CLIBD_MON components.cif.gz < monomer_codes.txt
 # Warning: such call overwrites monomer files in $CLIBD_MON.
 
 import sys
+import os
+import re
 from typing import Dict
 from gemmi import cif, MonLib
 
@@ -31,6 +34,9 @@ def main() -> None:
     print('updating', MONOMER_LIBRARY, '...')
     monlib = MonLib()
     monlib.monomer_dir = MONOMER_LIBRARY
+    path_list = os.path.join(MONOMER_LIBRARY, "list", "mon_lib_list.cif")
+    doc_list = cif.read(path_list)
+    links, mods = check_list(doc_list)
     for line in sys.stdin:
         code = line.strip()
         path = monlib.path(code)
@@ -40,7 +46,9 @@ def main() -> None:
             print('--- nothing to rename')
             continue
         print(' '.join('%s->%s' % item for item in renaming.items()))
-        remediate(path, renaming)
+        if remediate(path, renaming):
+            remediate_list(doc_list, code, links, mods, renaming)
+    doc_list.write_file(path_list)
 
 def read_old_new_mapping(ccd_block : cif.Block) -> Dict[str,str]:
     renaming = {}
@@ -82,6 +90,7 @@ def remediate(path : str, renaming : Dict[str, str]) -> None:
         return
 
     doc.write_file(path)
+    return True
 
 def remediate_column(column : cif.Column, renaming : Dict[str, str]) -> None:
     tag = column.tag
@@ -90,5 +99,42 @@ def remediate_column(column : cif.Column, renaming : Dict[str, str]) -> None:
             unquoted_id = cif.as_string(atom_id)
             if unquoted_id in renaming:
                 column[n] = renaming[unquoted_id]
+
+def check_list(doc: cif.Document):
+    links, mods = {}, {}
+    for r in doc.find_block("link_list").find("_chem_link.", ["id", "comp_id_1", "comp_id_2"]):
+        for i in (1, 2):
+           comp = cif.as_string(r[i])
+           if comp:
+               links.setdefault(comp, []).append((cif.as_string(r[0]), i))
+    for r in doc.find_block("mod_list").find("_chem_mod.", ["id", "comp_id"]):
+        comp = cif.as_string(r[1])
+        if comp:
+            mods.setdefault(comp, []).append(cif.as_string(r[0]))
+    return links, mods
+
+def remediate_list(doc : cif.Document, code : str, links, mods, renaming : Dict[str, str]):
+    for link, idx in links.get(code, ()):
+        block = doc.find_block("link_" + link)
+        for item in block:
+            table = block.item_as_table(item)
+            cols = []
+            for i, tag in enumerate(table.tags):
+                r = re.search("atom(_[0-9]|)_comp_id", tag)
+                if r:
+                    cola = table.find_column(tag[:tag.rindex(".")] + ".atom_id" + r.group(1))
+                    cols.append((table.column(i), cola))
+            for colc, cola in cols:
+                for i, c in enumerate(colc):
+                    if cif.as_int(c) == idx:
+                        unquoted_id = cif.as_string(cola[i])
+                        if unquoted_id in renaming:
+                            cola[i] = renaming[unquoted_id]
+    for mod in mods.get(code, ()):
+        block = doc.find_block("mod_" + mod)
+        for item in block:
+            table = block.item_as_table(item)
+            for i in range(table.width()):
+                remediate_column(table.column(i), renaming)
 
 main()
