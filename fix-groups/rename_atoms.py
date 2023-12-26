@@ -136,9 +136,9 @@ def check_peptide_n_h(ccd_block, monlib_block):
     ret = {}
     for h in "H", "H2", "H3":
         if names_monlib[h] not in renaming or renaming.get(names_monlib[h]) not in NH_ccd:
-            print("unmatched H", ccd_block.name, names_monlib[h])
-            if h not in Hs_ccd:
-                ret[names_monlib[h]] = h
+            print("unmatched H", ccd_block.name, names_monlib[h], h)
+            if "H3" not in Hs_ccd:
+                ret[names_monlib[h]] = "H3"
                 print("debug", ccd_block.name, ret)
             break
     return ret
