@@ -1,0 +1,40 @@
+
+Notes:
+
+- python3 proc-lig.py # download new ligands, runs acedrg downloads pdbs and makes mtzs and refmac scripts
+##- bash multisub-refmac.sh # run refmac for every script that doesn't have a log, creates "this_weeks_refmacs.table"
+##- [wait]
+- python3 pool-sub-1.py
+the above doesn't make the refmacs table, so
+- edit recover-refmac-table.sh and put in todays date
+- run recover-refmac-table.sh to make the refmacs table for this week.
+- edit refmac-log-analysis.py to set the refmac table for the analysis
+- python3 refmac-log-analysis.py # find the logs files that had an error in the above generated refmacs table
+- python3 compare-ligands.py 22_09_28_refmacs.table > 22_09_28_refmacs.log
+- grep ^delta: 22_09_28_refmacs.log > deltas.table # finds how much the ligands have moved. Makes deltas.table
+  # note in the above, 22_09_28_refmacs.table is just an example, you can use any number of table files.
+
+- Rscript ligand-hist.r # make plots using deltas.table
+
+
+Further extentions with Coot or gemmi
+
+Coot:
+  - learn coot API
+  - depends on Coot installation
+  - many functions available - most of the work is done
+
+Gemmi:
+  - learn GEMMI API
+  - gemmi is easily installed usig pip3
+  - more portable
+  - fewer functions - most of the functions will need to be written from scatch
+
+
+----
+Mon 14 Nov 18:47:43 GMT 2022
+
+  Using Rob's script:
+
+python3 robsrepo/Ligand-Tools/compare-models/compare_models_for_ligands_of_the_week.py --code 7s3x --ligand-analysis-base .
+ 
