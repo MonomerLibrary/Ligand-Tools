@@ -44,10 +44,12 @@ def read_chemcomp(doc):
 
 def prepare_references(monlib_path):
     defs = [("peptide", "GLY", ['N', 'CA', 'C', 'O', 'OXT', 'H', 'H2', 'H3']),
-            ("P-peptide", "PRO", ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'OXT', 'H']), # CB and CG are not needed in link
+            ("P-peptide", "PRO", ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'OXT', 'H', 'H2']), # CB and CG are not needed in link
             ("M-peptide", "5JP", ['O', 'C', 'CA', 'N', 'CN', 'OXT', 'H']),
             ("DNA/RNA", "N", ["C3'", "C4'", "HO3'", "O3'", "O5'", 'OP1', 'OP2', 'OP3', 'P',
                               "C5'", "C1'", "C2'", "O4'"]), # not needed for link, but needed to be "DNA/RNA"
+            ("S-NA", "AS", ["C3'", "C4'", "HO3'", "O3'", "O5'", 'OP1', 'S2P', 'OP3', 'P',
+                            "C5'", "C1'", "C2'", "O4'"]), # likewise
     ]
     groups = []
     for gr, mon, exatoms in defs:
@@ -74,7 +76,7 @@ def check_group(G1, G2, gr, cc):
                 print(' (it may not be the simplest isomorphism)')
                 break
         for id1, id2 in short_diff.items():
-            if gr == "DNA/RNA" and id2 in ("C5'", "C1'", "C2'", "O4'"): continue
+            if gr in ("DNA/RNA", "S-NA") and id2 in ("C5'", "C1'", "C2'", "O4'"): continue
             ret.append([id1, id2])
         if not ret:
             genuine = True
@@ -112,7 +114,7 @@ def check_group(G1, G2, gr, cc):
                 print("INFO: {} is M-peptide like but CN ({}) is not sp3 ({})".format(cc.name, cn, cn_type))
                 return False, []
 
-        if "DNA/RNA" == gr:
+        if gr in ("DNA/RNA", "S-NA"):
             O3p, chemtype = check_chemtype("O3'", cc, ret)
             if chemtype != "OH1":
                 print(ret)
@@ -257,7 +259,7 @@ def fix_group_and_add_aliases(doc, references):
                 if fix_OXT(cc, alias, doc):
                     doc_changed = True
 
-            if "DNA/RNA" in gr:
+            if gr in ("DNA/RNA", "S-NA"):
                 # OP1/OP2/OP3 are essentially equivalent
                 ops = {a[1]:i for i, a in enumerate(alias) if a[1].startswith("OP")}
                 print(alias)
@@ -266,6 +268,8 @@ def fix_group_and_add_aliases(doc, references):
                     r = re_OPn_or_OnP.search(alias[i][0])
                     if r:
                         n1 = [x for x in r.groups() if x][0]
+                        if n1 == "2" and gr == "S-NA":
+                            continue # S-NA doesn't have OP2
                         print(n1,n2)
                         if n1 != n2:
                             j = ops["OP"+n1]
@@ -304,7 +308,7 @@ def fix_group_and_add_aliases(doc, references):
         doc_changed = True
     else:
         for item in doc[-1]:
-            if "_chem_comp_alias.comp_id" in item.loop.tags:
+            if item.loop and "_chem_comp_alias.comp_id" in item.loop.tags:
                 print(cc.name, "alias no longer needed")
                 item.erase()
                 break
